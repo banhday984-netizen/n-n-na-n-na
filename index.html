@@ -1,0 +1,251 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>8/3 Heart Tree - Final Cinematic</title>
+    <style>
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
+            background: radial-gradient(circle at 50% 50%, #fff9f0, #ffe4e1, #ffd1dc);
+            font-family: 'Segoe UI', Tahoma, sans-serif; cursor: pointer; 
+        }
+        
+        #hint { 
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: #d32f2f; font-size: 20px; font-weight: bold; text-align: center; 
+            z-index: 2000; animation: pulse 1.5s infinite; pointer-events: none; width: 80%;
+            padding: 20px; border-radius: 50px; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        @keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.08); } }
+        
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* VÙNG CHỮ: Đẩy lên cao để không bị ảnh đè */
+        #text-box { 
+            position: absolute; top: 2vh; left: 5%; width: 90%; z-index: 100; 
+            pointer-events: none; padding: 15px; border-radius: 20px;
+            background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(8px);
+            box-sizing: border-box; display: flex; flex-direction: column;
+        }
+        .msg { 
+            font-size: clamp(14px, 4vw, 17px); color: #4a2c2a; font-weight: 600; line-height: 1.5; 
+            margin-bottom: 6px; text-align: center; text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+            min-height: 1.2em;
+        }
+        .sig { font-weight: 800; color: #d32f2f; margin-top: 5px; display: block; opacity: 0; transition: opacity 1s; text-align: right; }
+
+        /* VÙNG ẢNH: Lùi sâu xuống dưới, tỉ lệ 4.7 : 6.9 (siêu cao) */
+        #image-container { 
+            position: absolute; bottom: 2vh; left: 5%; width: 90%; 
+            height: 50vh; display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 50; pointer-events: none; 
+        }
+        .photo-frame {
+            width: 62%; aspect-ratio: 4.7 / 6.9; 
+            background-color: #fff; border: 4px solid #fff; border-radius: 10px; overflow: hidden;
+            box-shadow: 0 12px 25px rgba(255, 77, 77, 0.2);
+            opacity: 0; transition: all 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+        
+        #p1 { align-self: flex-start; transform: scale(0.5) translateY(40px); }
+        #p2 { align-self: flex-end; transform: scale(0.5) translateY(-40px); }
+
+        /* Khi active sẽ hiện lên */
+        #p1.active { opacity: 1; transform: scale(1) rotate(-3deg); }
+        #p2.active { opacity: 1; transform: scale(1) rotate(3deg); }
+
+        @media (min-width: 769px) {
+            #text-box { width: 30%; left: 5%; top: 5%; }
+            #image-container { width: 30%; left: 5%; top: 40%; height: 55vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="myAudio" loop>
+        <source src="https://www.dropbox.com/scl/fi/kkwvyoz9gmito7yp7m60m/nhac.mp3.mp3?rlkey=q36w4k638tcwt2f437kkkvw64&st=7m8sp12e&dl=1" type="audio/mpeg">
+    </audio>
+
+    <div id="hint">🌳 BẤM VÀO ĐÂY NÈ ❤️<br><small style="font-weight:normal;">(8/3 zui zẻ nhaaaaa)</small></div>
+
+    <div id="text-box">
+        <div class="msg" id="m1"></div>
+        <div class="msg" id="m2"></div>
+        <div class="msg" id="m3"></div>
+        <div class="msg" id="m4"></div> 
+        <div class="sig" id="m5">-- Your Friend --</div>
+    </div>
+
+    <div id="image-container">
+  <div class="photo-frame" id="p1"><img src="https://s143.convertio.me/p/rOC_b80vKw8Eq5Qt8mAU8Q/5935268324b7bd99161bcc0a791babb7/z7570237524721_ac4723449ef3b50f4549f49638d8036c.jpeg" onerror="this.src='https://via.placeholder.com/470x690?text=Anh+2'" alt="1"></div>
+        <div class="photo-frame" id="p2"><img src="https://s183.convertio.me/p/wCT4SZfdfcLdlhJBX0TCqQ/5935268324b7bd99161bcc0a791babb7/anh1.jpeg" onerror="this.src='https://via.placeholder.com/470x690?text=Anh+2'" alt="2"></div>
+      </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const cvs = document.getElementById('canvas');
+        const ctx = cvs.getContext('2d');
+        const audio = document.getElementById('myAudio');
+        let w, h, treeX, groundY, canopyY, scale;
+        let particles = [], clouds = [], magicDust = [], state = 'waiting'; 
+        let seed = { x: 0, y: -50, speed: 4.5 }, treeGrow = 0, started = false;
+        let particleCount = 0;
+        const MAX_PARTICLES = 2500; 
+
+        const colors = ['#FF0000', '#FF4500', '#FF8C00', '#FFD700', '#FF595E', '#FFB347', '#FFE66D', '#C1121F'];
+        const messages = [
+            "Chúc mừng ngày Quốc tế Phụ nữ 8/3 rực rỡ!",
+            "Chúc cậu luôn toả sáng như những vì tinh tú.",
+            "Chúc cậu luôn mạnh mẽ như gốc cổ thụ, ngọt ngào như những trái tim.",
+            "Mong cậu mãi rạng rỡ, hạnh phúc và thành công!"
+        ];
+
+        function init() {
+            w = cvs.width = window.innerWidth; 
+            h = cvs.height = window.innerHeight;
+            if (w > 768) { treeX = w * 0.75; scale = Math.min(w, h) / 45; } 
+            else { treeX = w * 0.5; scale = Math.min(w, h) / 42; }
+            canopyY = h * 0.42; groundY = h * 0.95; seed.x = treeX;
+            clouds = [];
+            for(let i = 0; i < 4; i++) {
+                clouds.push({ x: Math.random() * w, y: Math.random() * (h * 0.2), s: Math.random() * 0.2 + 0.1, r: Math.random() * 10 + 12 });
+            }
+            magicDust = [];
+            for(let i=0; i<40; i++) magicDust.push({ x: Math.random()*w, y: Math.random()*h, s: Math.random()*1.2, o: Math.random(), sp: Math.random()*0.1+0.05 });
+        }
+        window.addEventListener('resize', init); init();
+
+        function drawMagicDust() {
+            magicDust.forEach(d => {
+                ctx.fillStyle = `rgba(255, 255, 255, ${d.o})`;
+                ctx.beginPath(); ctx.arc(d.x, d.y, d.s, 0, Math.PI*2); ctx.fill();
+                d.y -= d.sp; if(d.y < 0) d.y = h;
+            });
+        }
+
+        function drawCloud(c) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+            ctx.arc(c.x + c.r*1.2, c.y - c.r*0.2, c.r*1.2, 0, Math.PI*2);
+            ctx.arc(c.x + c.r*2.2, c.y, c.r, 0, Math.PI*2);
+            ctx.fill();
+            c.x += c.s; if (c.x > w + 150) c.x = -250;
+        }
+
+        function getHeartPoint(t, r) {
+            let x = 16 * Math.pow(Math.sin(t), 3);
+            let y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+            return { x: x * r * scale, y: y * scale * r };
+        }
+
+        class Heart {
+            constructor(spawnAtCanopy) { this.reset(spawnAtCanopy); }
+            reset(spawnAtCanopy) {
+                this.t = Math.random() * Math.PI * 2; this.r = Math.sqrt(Math.random()); 
+                const pos = getHeartPoint(this.t, this.r); 
+                this.targetX = treeX + pos.x; this.targetY = canopyY + pos.y;
+                if (spawnAtCanopy) { this.x = this.targetX; this.y = this.targetY; this.opacity = 1; this.state = 'stay'; } 
+                else { this.x = treeX; this.y = groundY - 20; this.opacity = 0; this.state = 'fly'; }
+                this.size = Math.random() * 2 + 6; this.color = colors[Math.floor(Math.random() * colors.length)]; 
+                this.speed = Math.random() * 0.008 + 0.004; this.wobble = Math.random() * Math.PI * 2;
+                this.velX = (Math.random() - 0.5) * 4; 
+            }
+            update() {
+                if (this.state === 'fly') {
+                    this.x += (this.targetX - this.x) * this.speed; this.y += (this.targetY - this.y) * this.speed;
+                    if (this.opacity < 1) this.opacity += 0.04; if (Math.abs(this.x - this.targetX) < 1) this.state = 'stay';
+                } else if (this.state === 'stay') { if (Math.random() < 0.0006) this.state = 'fall'; } 
+                else if (this.state === 'fall') {
+                    this.y += 0.15; // RỤNG SIÊU SIÊU CHẬM
+                    this.x += this.velX * 0.2 + Math.sin(this.wobble) * 1.2; this.wobble += 0.02;
+                    if (this.y > h) this.reset(false);
+                }
+            }
+            draw() { 
+                ctx.save(); ctx.globalAlpha = this.opacity; ctx.fillStyle = this.color; ctx.translate(this.x, this.y); ctx.beginPath(); ctx.moveTo(0, 0); 
+                ctx.bezierCurveTo(-this.size/2, -this.size/2, -this.size, 0, 0, this.size); ctx.bezierCurveTo(this.size, 0, this.size/2, -this.size/2, 0, 0); ctx.fill(); ctx.restore(); 
+            }
+        }
+
+        function drawTree(p) {
+            ctx.lineCap = 'round'; ctx.strokeStyle = '#3d2b1f';
+            let trunkBaseW = scale * 8 * (1 - p * 0.2); let trunkTopW = scale * 1.5;
+            ctx.beginPath(); ctx.moveTo(treeX - trunkBaseW/2, groundY); 
+            ctx.quadraticCurveTo(treeX - trunkBaseW/4, groundY - 45, treeX - trunkTopW/2, groundY - (groundY - canopyY) * 0.55 * p);
+            ctx.lineTo(treeX + trunkTopW/2, groundY - (groundY - canopyY) * 0.55 * p);
+            ctx.quadraticCurveTo(treeX + trunkBaseW/4, groundY - 45, treeX + trunkBaseW/2, groundY);
+            ctx.fillStyle = '#3d2b1f'; ctx.fill();
+            if (p > 0.4) {
+                let pp = (p - 0.4) * 1.6; ctx.lineWidth = scale * 0.6;
+                const branches = [-14, -8, -2, 5, 10, 15];
+                branches.forEach(bx => {
+                    ctx.beginPath(); ctx.moveTo(treeX, groundY - (groundY - canopyY) * 0.45);
+                    ctx.quadraticCurveTo(treeX + (scale * bx * 0.4) * pp, canopyY + 60, treeX + (scale * bx) * pp, canopyY + 10); ctx.stroke();
+                });
+            }
+        }
+
+        function typeWriter(id, text, i, callback) {
+            if (i < text.length) {
+                document.getElementById(id).innerHTML += text.charAt(i);
+                setTimeout(() => typeWriter(id, text, i + 1, callback), 55);
+            } else if (callback) setTimeout(callback, 800);
+        }
+
+        function startTimeline() {
+            // Bước 1: Gõ chữ
+            typeWriter("m1", messages[0], 0, () => {
+                typeWriter("m2", messages[1], 0, () => {
+                    typeWriter("m3", messages[2], 0, () => {
+                        typeWriter("m4", messages[3], 0, () => {
+                            document.getElementById("m5").style.opacity = "1";
+                            
+                            // BƯỚC 2: CHỮ XONG -> ĐỢI 5 GIÂY -> HIỆN ẢNH
+                            setTimeout(() => {
+                                document.getElementById('p1').classList.add('active');
+                                setTimeout(() => { 
+                                    document.getElementById('p2').classList.add('active'); 
+                                }, 1500);
+                            }, 5000);
+                        });
+                    });
+                });
+            });
+        }
+
+        function loop() {
+            ctx.clearRect(0, 0, w, h); drawMagicDust(); clouds.forEach(drawCloud);
+            if (state === 'falling_seed') {
+                ctx.fillStyle = '#FF0000'; ctx.beginPath(); ctx.arc(seed.x, seed.y, 8, 0, Math.PI * 2); ctx.fill();
+                seed.y += seed.speed; if (seed.y >= groundY) state = 'growing_tree';
+            } else if (state === 'growing_tree') {
+                drawTree(treeGrow); treeGrow += 0.008; 
+                if (treeGrow >= 1) { 
+                    state = 'blooming'; 
+                    // BƯỚC 0: CÂY XONG -> ĐỢI 5 GIÂY -> MỚI CHẠY CHỮ
+                    setTimeout(startTimeline, 5000);
+                }
+            } else if (state === 'blooming') { 
+                drawTree(1); 
+                if (particleCount < MAX_PARTICLES) {
+                    for(let i=0; i<10; i++) { particles.push(new Heart(particleCount < 1200)); particleCount++; }
+                }
+                particles.forEach(p => { p.update(); p.draw(); }); 
+            }
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('click', function() {
+            if (started) return; started = true;
+            audio.play().catch(() => {});
+            document.getElementById('hint').style.display = 'none'; state = 'falling_seed';
+        });
+        loop(); 
+    </script>
+</body>
+</html>
